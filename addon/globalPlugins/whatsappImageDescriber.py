@@ -165,9 +165,9 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         
         self.openrouterForceFreeCheck = helper.addLabeledControl(
             "Use free providers only (appends :free)",
-            wx.CheckBox,
-            initial=config.conf["WhatsAppImageDescription"]["openrouterForceFree"]
+            wx.CheckBox
         )
+        self.openrouterForceFreeCheck.SetValue(config.conf["WhatsAppImageDescription"]["openrouterForceFree"])
         
         self.claudeApiKeyEdit = helper.addLabeledControl(
             "Anthropic Claude API Key:",
