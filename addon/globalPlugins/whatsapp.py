@@ -26,6 +26,7 @@ from gui import settingsDialogs, guiHelper
 SPEC = {
     'openaiApiKey': 'string(default="")',
     'openrouterApiKey': 'string(default="")',
+    'openrouterForceFree': 'boolean(default=False)',
     'claudeApiKey': 'string(default="")',
     'apiService': 'string(default="openai")',  # Options: openai, openrouter, claude
     'selectedModel': 'string(default="")',
@@ -162,6 +163,12 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
             style=wx.TE_PASSWORD
         )
         
+        self.openrouterForceFreeCheck = helper.addLabeledControl(
+            "Use free providers only (appends :free)",
+            wx.CheckBox,
+            initial=config.conf["WhatsAppImageDescription"]["openrouterForceFree"]
+        )
+        
         self.claudeApiKeyEdit = helper.addLabeledControl(
             "Anthropic Claude API Key:",
             wx.TextCtrl,
@@ -231,6 +238,7 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         # Hide all API key fields first
         self.openaiApiKeyEdit.Show(False)
         self.openrouterApiKeyEdit.Show(False)
+        self.openrouterForceFreeCheck.Show(False)
         self.claudeApiKeyEdit.Show(False)
         
         # Show only the relevant API key field
@@ -238,6 +246,7 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
             self.openaiApiKeyEdit.Show(True)
         elif apiServiceIndex == 1:  # OpenRouter
             self.openrouterApiKeyEdit.Show(True)
+            self.openrouterForceFreeCheck.Show(True)
         elif apiServiceIndex == 2:  # Claude
             self.claudeApiKeyEdit.Show(True)
         
@@ -301,6 +310,7 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         # Save API keys
         config.conf["WhatsAppImageDescription"]["openaiApiKey"] = self.openaiApiKeyEdit.GetValue()
         config.conf["WhatsAppImageDescription"]["openrouterApiKey"] = self.openrouterApiKeyEdit.GetValue()
+        config.conf["WhatsAppImageDescription"]["openrouterForceFree"] = self.openrouterForceFreeCheck.GetValue()
         config.conf["WhatsAppImageDescription"]["claudeApiKey"] = self.claudeApiKeyEdit.GetValue()
         
         # Save API service selection
@@ -672,6 +682,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             model_name = config.conf['WhatsAppImageDescription']['selectedModel']
             if not model_name or model_name not in MODEL_OPTIONS["openrouter"]:
                 model_name = MODEL_OPTIONS["openrouter"][0]
+            
+            # Check if force free variant is enabled
+            if config.conf['WhatsAppImageDescription']['openrouterForceFree']:
+                # Append :free suffix if not already present
+                if not model_name.endswith(":free"):
+                    model_name = f"{model_name}:free"
             
             payload = {
                 "model": model_name,
