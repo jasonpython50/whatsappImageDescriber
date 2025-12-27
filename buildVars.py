@@ -26,7 +26,7 @@ addon_info = {
 	"addon_description": _("""Adds AI-powered image description capability to WhatsApp Desktop.
 Press ALT+I when focused on a message with an image to get a detailed description using OpenAI, OpenRouter, or Anthropic Claude vision models"""),
 	# version
-	"addon_version": "26.0.0",
+	"addon_version": "26.1.1",
 	# Author(s)
 	"addon_author": "Emmanuel Asamoah <emmanuelasamoah179@gmail.com>",
 	# URL for the add-on documentation support

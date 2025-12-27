@@ -36,9 +36,56 @@ SPEC = {
 # Model options by service
 MODEL_OPTIONS = {
     "openai": ["gpt-4-vision-preview", "gpt-4o"],
-    "openrouter": ["google/gemini-2.0-flash-exp", "google/gemini-2.0-flash-lite-preview-02-05", "google/gemini-1.5-pro", "google/gemini-1.5-flash"],
+    "openrouter": [],  # Will be populated dynamically
     "claude": ["claude-3-7-sonnet-20250219", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
 }
+
+def fetchOpenRouterModels():
+    """Fetch available models from OpenRouter that support image input."""
+    try:
+        log.info("Fetching models from OpenRouter...")
+        response = requests.get(
+            "https://openrouter.ai/api/v1/models",
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            log.error(f"Failed to fetch OpenRouter models: {response.status_code}")
+            return []
+            
+        data = response.json()
+        models = []
+        
+        if 'data' in data:
+            for model in data['data']:
+                # Check if the model supports image input
+                # Based on OpenRouter docs: architecture -> input_modalities includes "image"
+                has_vision = False
+                
+                # Check architecture.input_modalities
+                if 'architecture' in model and 'input_modalities' in model['architecture']:
+                    if 'image' in model['architecture']['input_modalities']:
+                        has_vision = True
+                
+                # Check logic for specific known vision models if metadata is missing
+                if not has_vision:
+                    lid = model.get('id', '').lower()
+                    if any(x in lid for x in ['vision', 'gemini', 'claude-3', 'gpt-4o', 'gpt-4-turbo', 'llava']):
+                        # This is a heuristic fallback, but relying on metadata is safer.
+                        # For now, let's strictly trust the metadata or the IDs we know act like vision models
+                        if 'gpt-4' in lid or 'gemini' in lid or 'claude-3' in lid:
+                            has_vision = True
+
+                if has_vision:
+                    models.append(model['id'])
+        
+        models.sort()
+        log.info(f"Fetched {len(models)} vision models from OpenRouter")
+        return models
+        
+    except Exception as e:
+        log.error(f"Error fetching OpenRouter models: {e}")
+        return []
 
 # Text Window Class
 class TextWindow(wx.Frame):
@@ -90,6 +137,8 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
             self.apiServiceChoice.SetSelection(0)
         elif apiService == "openrouter":
             self.apiServiceChoice.SetSelection(1)
+            # Trigger model fetch if OpenRouter is already selected
+            wx.CallAfter(self.updateModelChoices)
         elif apiService == "claude":
             self.apiServiceChoice.SetSelection(2)
         else:
@@ -125,7 +174,10 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         
         # Model Selection
         self.modelChoices = []
-        self.updateModelChoices()
+        # Don't call updateModelChoices here immediately for OpenRouter to avoid blocking init
+        # It's handled by CallAfter above or onApiServiceChange
+        if apiService != "openrouter":
+            self.updateModelChoices()
         
         self.modelChoice = helper.addLabeledControl(
             "Model:",
@@ -200,6 +252,18 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         if apiServiceIndex == 0:  # OpenAI
             self.modelChoices.extend(MODEL_OPTIONS["openai"])
         elif apiServiceIndex == 1:  # OpenRouter
+            # Fetch models if not already cached/populated
+            if not MODEL_OPTIONS["openrouter"]:
+                # Fetch synchronously for simplicity in this context, 
+                # though ideally this should be async with a loading indicator.
+                # Given NVDA constraints, we'll do a quick fetch with timeout.
+                fetched_models = fetchOpenRouterModels()
+                if fetched_models:
+                    MODEL_OPTIONS["openrouter"] = fetched_models
+                else:
+                    # Fallback if fetch fails
+                    MODEL_OPTIONS["openrouter"] = ["google/gemini-2.0-flash-exp", "google/gemini-1.5-flash"]
+            
             self.modelChoices.extend(MODEL_OPTIONS["openrouter"])
         elif apiServiceIndex == 2:  # Claude
             self.modelChoices.extend(MODEL_OPTIONS["claude"])
