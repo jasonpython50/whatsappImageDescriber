@@ -25,9 +25,9 @@ from gui import settingsDialogs, guiHelper
 # Configuration specification with separate API keys for each service
 SPEC = {
     'openaiApiKey': 'string(default="")',
-    'geminiApiKey': 'string(default="")',
+    'openrouterApiKey': 'string(default="")',
     'claudeApiKey': 'string(default="")',
-    'apiService': 'string(default="openai")',  # Options: openai, gemini, claude
+    'apiService': 'string(default="openai")',  # Options: openai, openrouter, claude
     'selectedModel': 'string(default="")',
     'maxTokens': 'integer(default=300)',
     'language': 'string(default="English")'
@@ -36,7 +36,7 @@ SPEC = {
 # Model options by service
 MODEL_OPTIONS = {
     "openai": ["gpt-4-vision-preview", "gpt-4o"],
-    "gemini": ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
+    "openrouter": ["google/gemini-2.0-flash-exp", "google/gemini-2.0-flash-lite-preview-02-05", "google/gemini-1.5-pro", "google/gemini-1.5-flash"],
     "claude": ["claude-3-7-sonnet-20250219", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
 }
 
@@ -75,7 +75,7 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         # API Service
         apiServiceChoices = [
             "OpenAI (GPT-4 Vision)",
-            "Google Gemini",
+            "OpenRouter",
             "Anthropic Claude"
         ]
         self.apiServiceChoice = helper.addLabeledControl(
@@ -88,7 +88,7 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         apiService = config.conf["WhatsAppImageDescription"]["apiService"]
         if apiService == "openai":
             self.apiServiceChoice.SetSelection(0)
-        elif apiService == "gemini":
+        elif apiService == "openrouter":
             self.apiServiceChoice.SetSelection(1)
         elif apiService == "claude":
             self.apiServiceChoice.SetSelection(2)
@@ -106,10 +106,10 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
             style=wx.TE_PASSWORD
         )
         
-        self.geminiApiKeyEdit = helper.addLabeledControl(
-            "Google Gemini API Key:",
+        self.openrouterApiKeyEdit = helper.addLabeledControl(
+            "OpenRouter API Key:",
             wx.TextCtrl,
-            value=config.conf["WhatsAppImageDescription"]["geminiApiKey"],
+            value=config.conf["WhatsAppImageDescription"]["openrouterApiKey"],
             style=wx.TE_PASSWORD
         )
         
@@ -178,14 +178,14 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         
         # Hide all API key fields first
         self.openaiApiKeyEdit.Show(False)
-        self.geminiApiKeyEdit.Show(False)
+        self.openrouterApiKeyEdit.Show(False)
         self.claudeApiKeyEdit.Show(False)
         
         # Show only the relevant API key field
         if apiServiceIndex == 0:  # OpenAI
             self.openaiApiKeyEdit.Show(True)
-        elif apiServiceIndex == 1:  # Gemini
-            self.geminiApiKeyEdit.Show(True)
+        elif apiServiceIndex == 1:  # OpenRouter
+            self.openrouterApiKeyEdit.Show(True)
         elif apiServiceIndex == 2:  # Claude
             self.claudeApiKeyEdit.Show(True)
         
@@ -199,8 +199,8 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         apiServiceIndex = self.apiServiceChoice.GetSelection()
         if apiServiceIndex == 0:  # OpenAI
             self.modelChoices.extend(MODEL_OPTIONS["openai"])
-        elif apiServiceIndex == 1:  # Gemini
-            self.modelChoices.extend(MODEL_OPTIONS["gemini"])
+        elif apiServiceIndex == 1:  # OpenRouter
+            self.modelChoices.extend(MODEL_OPTIONS["openrouter"])
         elif apiServiceIndex == 2:  # Claude
             self.modelChoices.extend(MODEL_OPTIONS["claude"])
         
@@ -236,7 +236,7 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         """Save the settings."""
         # Save API keys
         config.conf["WhatsAppImageDescription"]["openaiApiKey"] = self.openaiApiKeyEdit.GetValue()
-        config.conf["WhatsAppImageDescription"]["geminiApiKey"] = self.geminiApiKeyEdit.GetValue()
+        config.conf["WhatsAppImageDescription"]["openrouterApiKey"] = self.openrouterApiKeyEdit.GetValue()
         config.conf["WhatsAppImageDescription"]["claudeApiKey"] = self.claudeApiKeyEdit.GetValue()
         
         # Save API service selection
@@ -244,7 +244,7 @@ class WhatsAppImageDescriptionSettingsPanel(settingsDialogs.SettingsPanel):
         if serviceIndex == 0:
             config.conf["WhatsAppImageDescription"]["apiService"] = "openai"
         elif serviceIndex == 1:
-            config.conf["WhatsAppImageDescription"]["apiService"] = "gemini"
+            config.conf["WhatsAppImageDescription"]["apiService"] = "openrouter"
         elif serviceIndex == 2:
             config.conf["WhatsAppImageDescription"]["apiService"] = "claude"
         
@@ -503,9 +503,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if apiService == "openai":
                 apiKey = config.conf['WhatsAppImageDescription']['openaiApiKey']
                 description = self._describeWithOpenAI(image_data, apiKey)
-            elif apiService == "gemini":
-                apiKey = config.conf['WhatsAppImageDescription']['geminiApiKey']
-                description = self._describeWithGemini(image_data, apiKey)
+            elif apiService == "openrouter":
+                apiKey = config.conf['WhatsAppImageDescription']['openrouterApiKey']
+                description = self._describeWithOpenRouter(image_data, apiKey)
             elif apiService == "claude":
                 apiKey = config.conf['WhatsAppImageDescription']['claudeApiKey']
                 description = self._describeWithClaude(image_data, apiKey)
@@ -589,46 +589,50 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             log.error(f"OpenAI API error: {e}")
             return f"Error: {str(e)}"
     
-    def _describeWithGemini(self, image_data, api_key):
-        """Use Google's Gemini API to describe the image."""
+    def _describeWithOpenRouter(self, image_data, api_key):
+        """Use OpenRouter API to describe the image."""
         try:
             if not api_key:
-                return "Google Gemini API key not configured. Please add your API key in settings."
+                return "OpenRouter API key not configured. Please add your API key in settings."
                 
             # Convert image to base64
             encoded_image = base64.b64encode(image_data).decode('utf-8')
             
             headers = {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "HTTP-Referer": "https://github.com/jasonpython50/whatsappImageDescriber",
+                "X-Title": "WhatsApp Image Describer NVDA Add-on"
             }
             
             model_name = config.conf['WhatsAppImageDescription']['selectedModel']
-            if not model_name or model_name not in MODEL_OPTIONS["gemini"]:
-                model_name = MODEL_OPTIONS["gemini"][0]
+            if not model_name or model_name not in MODEL_OPTIONS["openrouter"]:
+                model_name = MODEL_OPTIONS["openrouter"][0]
             
             payload = {
-                "contents": [
+                "model": model_name,
+                "messages": [
                     {
-                        "parts": [
+                        "role": "user",
+                        "content": [
                             {
+                                "type": "text",
                                 "text": f"Describe this image in detail. If the image contain text, extract the exact text  from the image after a brief description. Use {config.conf['WhatsAppImageDescription']['language']} language."
                             },
                             {
-                                "inline_data": {
-                                    "mime_type": "image/png",
-                                    "data": encoded_image
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{encoded_image}"
                                 }
                             }
                         ]
                     }
                 ],
-                "generationConfig": {
-                    "maxOutputTokens": config.conf['WhatsAppImageDescription']['maxTokens']
-                }
+                "max_tokens": config.conf['WhatsAppImageDescription']['maxTokens']
             }
             
             response = requests.post(
-                f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={api_key}",
+                "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
                 json=payload,
                 timeout=30
@@ -637,12 +641,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             response_data = response.json()
             
             if 'error' in response_data:
-                return f"Error from Gemini: {response_data['error']['message']}"
+                return f"Error from OpenRouter: {response_data['error']['message']}"
             
-            return response_data['candidates'][0]['content']['parts'][0]['text']
+            return response_data['choices'][0]['message']['content']
             
         except Exception as e:
-            log.error(f"Gemini API error: {e}")
+            log.error(f"OpenRouter API error: {e}")
             return f"Error: {str(e)}"
     
     def _describeWithClaude(self, image_data, api_key):
